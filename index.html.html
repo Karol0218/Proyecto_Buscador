@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <!-- 1. Metadatos básicos -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buscador de usuarios de GitHub</title>
+
+  <!-- ============================================================
+       CSS — Diseño NEO-BRUTALISTA en modo claro
+       Secciones: 1) Tokens  2) Base  3) Contenedor  4) Encabezado
+                  5) Búsqueda  6) Estados (carga/error)  7) Resultado
+                  8) Consola  9) Animaciones  10) Responsive
+       ============================================================ -->
+  <style>
+    /* ---------- 1. Tokens de diseño ---------- */
+    :root {
+      --bg:        #F1E8FF;   /* fondo lavanda */
+      --surface:   #FFFFFF;   /* tarjetas */
+      --ink:       #111111;   /* texto y bordes */
+      --muted:     #6B5B80;   /* texto secundario (gris-violeta) */
+      --accent:    #A855F7;   /* violeta vivo: cabecera y botón */
+      --accent-2:  #6D28D9;   /* violeta profundo: badge, foco y acentos */
+      --ok:        #2BB673;   /* verde éxito */
+      --danger:    #FF4D6D;   /* rosa/rojo error */
+      --terminal:  #111111;   /* fondo consola */
+      --terminal-text: #D8B4FE;  /* lila claro: texto "info" de la consola */
+
+      --border:    3px solid var(--ink);
+      --shadow:    6px 6px 0 var(--ink);
+      --shadow-sm: 3px 3px 0 var(--ink);
+      --radius:    10px;
+    }
+
+    /* ---------- 2. Base ---------- */
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 32px 16px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      /* Cuadrícula sutil de fondo, solo decorativa */
+      background-image:
+        linear-gradient(rgba(17, 17, 17, .05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(17, 17, 17, .05) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    h1, h2 {
+      font-family: "Arial Black", "Helvetica Neue", Impact, sans-serif;
+      font-weight: 900;
+      line-height: 1.15;
+      margin: 0;
+    }
+
+    /* Etiqueta accesible pero visible solo para lectores de pantalla */
+    .sr-only {
+      position: absolute;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* ---------- 3. Contenedor principal ---------- */
+    .container {
+      max-width: 560px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: var(--border);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    /* ---------- 4. Encabezado (franja morada) ---------- */
+    .header {
+      background: var(--accent);
+      border-bottom: var(--border);
+      padding: 24px 24px 20px;
+    }
+
+    .header h1 {
+      font-size: clamp(1.4rem, 5vw, 2rem);
+      text-transform: uppercase;
+      letter-spacing: -.5px;
+    }
+
+    .header p {
+      margin: 8px 0 0;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    /* ---------- 5. Zona de búsqueda ---------- */
+    .buscador {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Fila unida: input + botón pegado a la derecha */
+    .search-row {
+      display: flex;
+      gap: 0;
+    }
+
+    .search-row input {
+      flex: 1;
+      min-width: 0;
+      padding: 14px 16px;
+      font-size: 1rem;
+      font-family: inherit;
+      color: var(--ink);
+      background: var(--surface);
+      border: var(--border);
+      border-right: none;
+      border-radius: var(--radius) 0 0 var(--radius);
+      transition: background-color .15s ease, box-shadow .15s ease;
+    }
+
+    /* Foco visible: lavanda suave + sombra dura violeta */
+    .search-row input:focus {
+      outline: none;
+      background: #F9F3FF;
+      box-shadow: inset 0 0 0 3px var(--accent-2);
+    }
+
+    .search-row button {
+      padding: 14px 22px;
+      font-family: "Arial Black", "Helvetica Neue", Impact, sans-serif;
+      font-size: 1rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      color: var(--ink);
+      background: var(--accent);
+      border: var(--border);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      box-shadow: var(--shadow-sm);
+      cursor: pointer;
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+
+    .search-row button:hover:not(:disabled) {
+      transform: translate(-2px, -2px);
+      box-shadow: 5px 5px 0 var(--ink);
+    }
+
+    .search-row button:active:not(:disabled) {
+      transform: translate(3px, 3px);
+      box-shadow: 0 0 0 var(--ink);
+    }
+
+    /* Estado deshabilitado: gris, sin sombra */
+    .search-row button:disabled {
+      background: #C9C9C9;
+      color: #5B5B5B;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    /* ---------- 6. Estados: carga y error ---------- */
+    #loading {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    #loading.visible { display: flex; }
+
+    /* Tres puntos animados (CSS puro) */
+    .dots { display: inline-flex; gap: 4px; }
+    .dots span {
+      width: 8px; height: 8px;
+      background: var(--accent-2);
+      border: 2px solid var(--ink);
+      border-radius: 50%;
+      animation: rebotar 1s infinite ease-in-out;
+    }
+    .dots span:nth-child(2) { animation-delay: .15s; }
+    .dots span:nth-child(3) { animation-delay: .3s; }
+
+    #error {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: #FCE4FF;   /* magenta claro (tono morado del error) */
+      border: var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      font-weight: 600;
+    }
+
+    #error.visible { display: flex; animation: aparecer .2s ease-out; }
+
+    #error .icono { font-size: 1.4rem; line-height: 1; }
+
+    /* ---------- 7. Resultado (tarjeta vertical) ---------- */
+    #resultado {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 14px;
+      margin: 0 24px 24px;
+      padding: 24px;
+      background: var(--surface);
+      border: var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    #resultado.visible { display: flex; animation: aparecer .2s ease-out; }
+
+    /* Avatar cuadrado 96x96 con esquinas redondeadas */
+    #avatar {
+      width: 96px;
+      height: 96px;
+      object-fit: cover;
+      border: var(--border);
+      border-radius: var(--radius);
+      background: var(--accent);
+      box-shadow: var(--shadow-sm);
+    }
+
+    #nombre {
+      font-family: "Arial Black", "Helvetica Neue", Impact, sans-serif;
+      font-size: 1.6rem;
+      margin: 0;
+      word-break: break-word;
+    }
+
+    /* Badge violeta con el número de repos */
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      background: var(--accent-2);
+      color: #FFFFFF;
+      border: var(--border);
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: .95rem;
+    }
+
+    /* Botón-enlace al perfil */
+    #perfil {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 12px 20px;
+      background: var(--accent);
+      color: var(--ink);
+      text-decoration: none;
+      font-weight: 900;
+      border: var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+
+    #perfil:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 5px 5px 0 var(--ink);
+    }
+
+    #perfil:active {
+      transform: translate(3px, 3px);
+      box-shadow: 0 0 0 var(--ink);
+    }
+
+    /* ---------- 8. Consola de eventos (terminal) ---------- */
+    .consola-wrap { padding: 0 24px 24px; }
+
+    .consola {
+      background: var(--terminal);
+      border: var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    /* Mini barra superior de tres puntos */
+    .consola-barra {
+      display: flex;
+      gap: 6px;
+      padding: 8px 12px;
+      background: #2A2A2A;
+      border-bottom: 2px solid var(--ink);
+    }
+
+    .consola-barra span {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      border: 1px solid #000;
+    }
+    .consola-barra span:nth-child(1) { background: #FF5F56; }
+    .consola-barra span:nth-child(2) { background: #FFBD2E; }
+    .consola-barra span:nth-child(3) { background: #27C93F; }
+
+    /* Scroll interno, altura máxima 140 px */
+    #log {
+      max-height: 140px;
+      overflow-y: auto;
+      margin: 0;
+      padding: 10px 12px 12px;
+      list-style: none;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: .82rem;
+      color: var(--terminal-text);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    #log li { padding: 2px 0; }
+    #log li::before { content: "▸ "; color: #6B6B6B; }
+
+    /* Coloreado según el tipo de evento */
+    #log li[data-tipo="info"]  { color: var(--terminal-text); } /* lila claro */
+    #log li[data-tipo="ok"]    { color: #C084FC; }              /* violeta vivo */
+    #log li[data-tipo="error"] { color: #FF8FA3; }              /* rosa (error) */
+
+    /* ---------- 9. Animaciones ---------- */
+    @keyframes rebotar {
+      0%, 60%, 100% { transform: translateY(0); }
+      30%           { transform: translateY(-6px); }
+    }
+
+    @keyframes aparecer {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Respeto por usuarios con menos movimiento */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
+
+    /* ---------- 10. Responsive (desde 320 px) ---------- */
+    @media (max-width: 480px) {
+      body { padding: 16px 8px; }
+      .header { padding: 20px 16px 16px; }
+      .buscador { padding: 16px; }
+      .consola-wrap { padding: 0 16px 16px; }
+      #resultado { margin: 0 16px 16px; padding: 20px 16px; }
+
+      /* Barra de búsqueda apilada */
+      .search-row { flex-direction: column; gap: 10px; }
+      .search-row input {
+        border-right: var(--border);
+        border-radius: var(--radius);
+      }
+      .search-row button {
+        width: 100%;
+        border-radius: var(--radius);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- 2. Contenedor principal -->
+  <main class="container">
+
+    <!-- Encabezado -->
+    <header class="header">
+      <h1>Buscador de usuarios de GitHub</h1>
+      <p>Ejercicio de try / catch / finally con fetch</p>
+    </header>
+
+    <!-- Zona de búsqueda -->
+    <div class="buscador">
+      <form id="formulario" novalidate>
+        <label class="sr-only" for="username">Nombre de usuario de GitHub</label>
+        <div class="search-row">
+          <input
+            type="text"
+            id="username"
+            name="username"
+            placeholder="ej. octocat"
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <button type="submit" id="buscar">Buscar</button>
+        </div>
+      </form>
+
+      <!-- Indicador de carga: visible solo mientras se consulta -->
+      <div id="loading" aria-hidden="true">
+        <span class="dots"><span></span><span></span><span></span></span>
+        Cargando información...
+      </div>
+
+      <!-- Caja de error -->
+      <div id="error" role="alert" aria-live="polite">
+        <span class="icono" aria-hidden="true">⚠️</span>
+        <span id="error-texto"></span>
+      </div>
+    </div>
+
+    <!-- Resultado: tarjeta vertical con los datos del usuario -->
+    <section id="resultado" aria-live="polite">
+      <img id="avatar" alt="">
+      <h2 id="nombre"></h2>
+      <span class="badge"><span id="repos"></span> repositorios públicos</span>
+      <a id="perfil" href="#" target="_blank" rel="noopener noreferrer">
+        Ver perfil en GitHub →
+      </a>
+    </section>
+
+    <!-- Consola de eventos: muestra el flujo try/catch/finally -->
+    <div class="consola-wrap">
+      <div class="consola">
+        <div class="consola-barra" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <ul id="log" aria-live="polite" aria-label="Consola de eventos">
+          <li data-tipo="info">Consola de eventos (para ver el flujo del try/catch)...</li>
+        </ul>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 3. Script al final del body -->
+  <script>
+    // ============================================================
+    // Referencias a los elementos del DOM (IDs fijos del ejercicio)
+    // ============================================================
+    const inputUsername = document.getElementById('username');
+    const botonBuscar   = document.getElementById('buscar');
+    const formulario    = document.getElementById('formulario');
+    const cajaLoading   = document.getElementById('loading');
+    const cajaError     = document.getElementById('error');
+    const textoError    = document.getElementById('error-texto');
+    const cajaResultado = document.getElementById('resultado');
+    const imgAvatar     = document.getElementById('avatar');
+    const elNombre      = document.getElementById('nombre');
+    const elRepos       = document.getElementById('repos');
+    const enlacePerfil  = document.getElementById('perfil');
+    const consola       = document.getElementById('log');
+
+    // ============================================================
+    // log(mensaje, tipo)
+    // Escribe una línea en la consola de eventos de la interfaz.
+    // tipo: "info" | "ok" | "error"
+    // ============================================================
+    function log(mensaje, tipo = 'info') {
+      const linea = document.createElement('li');
+      linea.textContent = `[${new Date().toLocaleTimeString()}] ${mensaje}`;
+      linea.dataset.tipo = tipo;          // para el coloreado en CSS
+      consola.appendChild(linea);
+      consola.scrollTop = consola.scrollHeight; // siempre visible al final
+    }
+
+    // ============================================================
+    // validarUsername(username)
+    // Valida el texto ANTES de llamar a la API.
+    // Lanza Error si es inválido → lo capturará el catch.
+    // ============================================================
+    function validarUsername(username) {
+      // 1) Campo vacío
+      if (username === '') {
+        throw new Error('Por favor escribe un nombre de usuario.');
+      }
+
+      // 2) Contiene "@" (elemento adicional, p. ej. "@octocat")
+      if (username.includes('@')) {
+        throw new Error('El nombre de usuario no debe incluir "@". Escribe solo: ' + username.replace(/@/g, ''));
+      }
+
+      // 3) Contiene espacios
+      if (/\s/.test(username)) {
+        throw new Error('El nombre de usuario no puede contener espacios.');
+      }
+
+      // 4) Caracteres no permitidos (solo letras, números y guion simple)
+      if (!/^[A-Za-z0-9-]+$/.test(username)) {
+        throw new Error('El nombre de usuario contiene caracteres no permitidos.');
+      }
+
+      // 5) Longitud máxima de 39 caracteres
+      if (username.length > 39) {
+        throw new Error('El nombre de usuario no puede superar los 39 caracteres.');
+      }
+
+      // 6) No empieza ni termina con guion
+      if (username.startsWith('-') || username.endsWith('-')) {
+        throw new Error('El nombre de usuario no puede empezar ni terminar con guion.');
+      }
+
+      // 7) Sin guiones consecutivos
+      if (username.includes('--')) {
+        throw new Error('El nombre de usuario no puede contener guiones consecutivos.');
+      }
+    }
+
+    // ============================================================
+    // buscarUsuario(username)
+    // Hace el fetch a la API de GitHub.
+    // Lanza Error si la respuesta no es ok (404, 403 u otro).
+    // Si no hay conexión, fetch lanza TypeError (lo verá el catch).
+    // ============================================================
+    async function buscarUsuario(username) {
+      const url = `https://api.github.com/users/${encodeURIComponent(username)}`;
+
+      // Inicio del fetch registrado en la consola de eventos
+      log(`GET ${url}`, 'info');
+
+      const respuesta = await fetch(url);
+
+      // Usuario no encontrado
+      if (respuesta.status === 404) {
+        throw new Error(`Usuario "${username}" no encontrado (código 404)`);
+      }
+
+      // Límite de peticiones sin autenticación
+      if (respuesta.status === 403) {
+        throw new Error('Límite de peticiones de GitHub alcanzado. Intenta de nuevo en unos minutos (código 403).');
+      }
+
+      // Cualquier otro código de error
+      if (!respuesta.ok) {
+        throw new Error(`GitHub respondió con el código ${respuesta.status}`);
+      }
+
+      // Todo bien: devolvemos los datos en bruto
+      return respuesta.json();
+    }
+
+    // ============================================================
+    // Pintar el resultado en pantalla (sin innerHTML por seguridad)
+    // ============================================================
+    function pintarResultado(datos) {
+      // Avatar: si falla la carga, mostramos un fondo de respaldo
+      imgAvatar.onerror = function () {
+        imgAvatar.onerror = null;              // evitamos bucles infinitos
+        imgAvatar.removeAttribute('src');      // queda el fondo violeta de respaldo
+      };
+      imgAvatar.src = datos.avatar_url;
+      imgAvatar.alt = `Avatar de ${datos.login}`;
+
+      // Nombre público o, si no tiene, su login
+      elNombre.textContent = datos.name || datos.login;
+
+      // Cantidad de repositorios públicos
+      elRepos.textContent = datos.public_repos;
+
+      // Enlace al perfil
+      enlacePerfil.href = datos.html_url;
+    }
+
+    // ============================================================
+    // Limpieza visual antes de cada búsqueda
+    // ============================================================
+    function reiniciarVista() {
+      cajaResultado.classList.remove('visible');
+      cajaError.classList.remove('visible');
+      textoError.textContent = '';
+      imgAvatar.removeAttribute('src');
+      imgAvatar.alt = '';
+      elNombre.textContent = '';
+      elRepos.textContent = '';
+      enlacePerfil.href = '#';
+    }
+
+    // ============================================================
+    // FLUJO PRINCIPAL (evento de clic / Enter)
+    // ============================================================
+    async function realizarBusqueda() {
+      // 1) Leer y limpiar (trim) el valor del input
+      const username = inputUsername.value.trim();
+
+      // 2) Reset visual: ocultar resultado y error
+      reiniciarVista();
+
+      // 3) Deshabilitar el botón y mostrar la carga
+      botonBuscar.disabled = true;
+      cajaLoading.classList.add('visible');
+      cajaLoading.setAttribute('aria-hidden', 'false');
+
+      log(`Búsqueda iniciada para "${username || '(vacío)'}"`, 'info');
+
+      // --------------------------------------------------------
+      // TRY: aquí ocurre todo lo que "puede fallar"
+      // --------------------------------------------------------
+      try {
+        log('Entrando al bloque TRY...', 'info');
+
+        // Validación ANTES de llamar a la API (lanza Error si es inválido)
+        validarUsername(username);
+        log('Username validado correctamente.', 'ok');
+
+        // Consulta a la API de GitHub
+        const datos = await buscarUsuario(username);
+
+        // Si llegamos aquí, todo salió bien: pintamos el resultado
+        pintarResultado(datos);
+        cajaResultado.classList.add('visible');
+        log(`Usuario "${datos.login}" encontrado: ${datos.public_repos} repos públicos.`, 'ok');
+      }
+      // --------------------------------------------------------
+      // CATCH: captura CUALQUIER error (validación, 404, 403,
+      //        TypeError por falta de conexión, etc.)
+      // --------------------------------------------------------
+      catch (error) {
+        // Caso especial: sin internet → fetch lanza TypeError
+        const mensaje = error instanceof TypeError
+          ? 'No se pudo conectar. Revisa tu conexión a internet.'
+          : error.message;
+
+        textoError.textContent = mensaje;
+        cajaError.classList.add('visible');
+        log(`Error capturado: ${mensaje}`, 'error');
+      }
+      // --------------------------------------------------------
+      // FINALLY: se ejecuta SIEMPRE, haya error o no.
+      // Aquí garantizamos que la app nunca quede "colgada".
+      // --------------------------------------------------------
+      finally {
+        cajaLoading.classList.remove('visible');
+        cajaLoading.setAttribute('aria-hidden', 'true');
+        botonBuscar.disabled = false;
+        log('Búsqueda finalizada (bloque finally ejecutado).', 'info');
+      }
+    }
+
+    // ============================================================
+    // Eventos: clic en el botón y tecla Enter en el input
+    // ============================================================
+    // El submit cubre tanto el clic en #buscar como la tecla Enter en #username
+    formulario.addEventListener('submit', function (evento) {
+      evento.preventDefault();   // evita el envío tradicional del formulario
+      realizarBusqueda();
+    });
+  </script>
+</body>
+</html>
